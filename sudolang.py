@@ -1,5 +1,7 @@
 # SudoLang - Proyecto N.1: analizador lexico, tabla de simbolos y manejador de errores
 # Lenguajes Formales, Automatas y Compiladores - UTP
+import tkinter as tk
+from tkinter import ttk, filedialog
 
 # ---------- DEFINICION DEL LENGUAJE ----------
 RESERVADAS = {"entero": "TIPO", "decimal": "TIPO", "texto": "TIPO", "mostrar": "MOSTRAR"}
@@ -66,28 +68,52 @@ class TablaSimbolos:
             self.cubetas[self.hash(lexema)].append(
                 {"lexema": lexema, "token": token, "tipo": tipo, "linea": linea})
 
-    def mostrar(self):
-        print("\n" + "=" * 62 + "\nTABLA DE SIMBOLOS\n" + "=" * 62)
-        print(f"{'Pos':<5}{'Lexema':<20}{'Token':<13}{'Tipo':<10}{'Linea'}")
-        print("-" * 62)
-        for pos, cubeta in enumerate(self.cubetas):
-            for s in cubeta:
-                print(f"{pos:<5}{s['lexema']:<20}{s['token']:<13}{s['tipo']:<10}{s['linea']}")
+    def filas(self):
+        """Devuelve el contenido como filas (posicion, lexema, token, tipo, linea)."""
+        return [(pos, s["lexema"], s["token"], s["tipo"], s["linea"])
+                for pos, cubeta in enumerate(self.cubetas) for s in cubeta]
 
 
-# ---------- MANEJADOR DE ERRORES ----------
+# ---------- MANEJADOR DE ERRORES (INTERFAZ DE USUARIO) ----------
 class ManejadorErrores:
-    def __init__(self):
-        self.errores = []
+    """Ventana que muestra la evaluacion y los errores en el momento en que ocurren."""
+
+    def __init__(self, tabla):
+        self.errores, self.tabla = [], tabla
+        self.ventana = tk.Tk()
+        self.ventana.title("SudoLang - Manejador de errores")
+        self.salida = tk.Text(self.ventana, width=100, height=18)   # evaluacion paso a paso
+        self.salida.tag_config("error", foreground="red")
+        self.salida.tag_config("valida", foreground="green")
+        self.salida.pack(fill="both", expand=True)
+        self.lista = self.crear_lista(self.ventana, ("Linea", "Tipo", "Mensaje"))
+        self.boton = tk.Button(self.ventana, text="Ver tabla de simbolos",
+                               state="disabled", command=self.mostrar_tabla)
+        self.boton.pack(pady=5)
+
+    def crear_lista(self, padre, columnas):
+        lista = ttk.Treeview(padre, columns=columnas, show="headings", height=8)
+        for c in columnas:
+            lista.heading(c, text=c)
+        lista.pack(fill="both", expand=True)
+        return lista
+
+    def escribir(self, texto, etiqueta=None):
+        self.salida.insert("end", texto + "\n", etiqueta)
+        self.salida.see("end")
+        self.ventana.update()                     # refresca la ventana durante la evaluacion
 
     def reportar(self, linea, tipo, mensaje):
         self.errores.append((linea, tipo, mensaje))
-        print(f"   [ERROR {tipo}] {mensaje}")       # se informa durante la evaluacion
+        self.lista.insert("", "end", values=(linea, tipo, mensaje))
+        self.escribir(f"   [ERROR {tipo}] {mensaje}", "error")
 
-    def mostrar(self):
-        print("\n" + "=" * 62 + f"\nRESUMEN DE ERRORES ({len(self.errores)})\n" + "=" * 62)
-        for linea, tipo, mensaje in self.errores:
-            print(f"Linea {linea:<3} {tipo:<11} {mensaje}")
+    def mostrar_tabla(self):
+        ventana = tk.Toplevel(self.ventana)
+        ventana.title("Tabla de simbolos")
+        lista = self.crear_lista(ventana, ("Pos", "Lexema", "Token", "Tipo", "Linea"))
+        for fila in self.tabla.filas():
+            lista.insert("", "end", values=fila)
 
 
 # ---------- ANALISIS ----------
@@ -155,39 +181,33 @@ def analizar_semantica(tokens, n, tabla, errores):
 
 # ---------- PROGRAMA PRINCIPAL ----------
 def main():
-    tabla, errores = TablaSimbolos(), ManejadorErrores()
+    tabla = TablaSimbolos()
+    errores = ManejadorErrores(tabla)
     for palabra, token in RESERVADAS.items():     # palabras reservadas precargadas
         tabla.instalar(palabra, token, "-", 0)
 
-    print("=" * 62 + "\nSUDOLANG - Analizador lexico\n" + "=" * 62)
-    while True:
-        try:
-            archivo = open(input("Archivo de entrada: ").strip(), encoding="utf-8")
-            break
-        except OSError:
-            print("No se pudo abrir el archivo, intente de nuevo.")
+    ruta = filedialog.askopenfilename(title="Seleccione el archivo de entrada")
+    if not ruta:                                  # el usuario cancelo
+        return
 
     validas = total = 0
-    for n, linea in enumerate(archivo, 1):
-        cadena = linea.strip()
-        if not cadena or cadena.startswith("#"):  # lineas vacias y comentarios
-            continue
-        total += 1
-        print(f"\nLinea {n}: {cadena}")
-        tokens, ok = analizar_lexico(cadena, n, tabla, errores)
-        print("   Tokens:", " ".join(f"[{t} {l}]" for t, l in tokens))
-        ok = ok and analizar_sintaxis(tokens, n, errores) and analizar_semantica(tokens, n, tabla, errores)
-        print("   Resultado:", "VALIDA" if ok else "INVALIDA")
-        validas += ok
-    archivo.close()
-    print(f"\nCadenas evaluadas: {total} | validas: {validas} | invalidas: {total - validas}")
+    with open(ruta, encoding="utf-8") as archivo:
+        for n, linea in enumerate(archivo, 1):
+            cadena = linea.strip()
+            if not cadena or cadena.startswith("#"):  # lineas vacias y comentarios
+                continue
+            total += 1
+            errores.escribir(f"\nLinea {n}: {cadena}")
+            tokens, ok = analizar_lexico(cadena, n, tabla, errores)
+            errores.escribir("   Tokens: " + " ".join(f"[{t} {l}]" for t, l in tokens))
+            ok = ok and analizar_sintaxis(tokens, n, errores) and analizar_semantica(tokens, n, tabla, errores)
+            errores.escribir("   Resultado: " + ("VALIDA" if ok else "INVALIDA"), "valida" if ok else "error")
+            validas += ok
+            errores.ventana.after(300)            # pausa para ver la evaluacion paso a paso
 
-    while True:
-        opcion = input("\n1) Tabla de simbolos  2) Resumen de errores  3) Salir\nOpcion: ").strip()
-        if opcion == "1": tabla.mostrar()
-        elif opcion == "2": errores.mostrar()
-        elif opcion == "3": break
-        else: print("Opcion no valida.")
+    errores.escribir(f"\nCadenas evaluadas: {total} | validas: {validas} | invalidas: {total - validas}")
+    errores.boton.config(state="normal")          # al final se habilita la tabla de simbolos
+    errores.ventana.mainloop()
 
 
 if __name__ == "__main__":
