@@ -1,0 +1,22 @@
+# Programa de prueba en SudoLang (cadenas validas e invalidas)
+entero edad = 20;
+decimal precio = 15.75;
+texto saludo = "Hola mundo";
+entero total = edad + 5 * 2;
+precio = precio - 0.25;
+mostrar saludo;
+mostrar total + edad;
+
+# Errores lexicos
+entero x = 5 @ 3;
+decimal y = 12. ;
+texto z = "sin cerrar;
+
+# Errores sintacticos
+entero = 10;
+entero a = 5 + ;
+mostrar total
+
+# Errores semanticos
+entero edad = 30;
+suma = edad + 1;
