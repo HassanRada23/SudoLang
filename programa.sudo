@@ -20,3 +20,15 @@ mostrar total
 # Errores semanticos
 entero edad = 30;
 suma = edad + 1;
+
+# Errores de tipos
+entero n = 7.5;
+precio = "caro";
+entero m = total + "uno";
+texto t = saludo * saludo;
+mostrar saludo + total;
+
+# Tipos validos
+decimal d = 3;
+texto saludo2 = saludo + " adios";
+mostrar precio * 2;
